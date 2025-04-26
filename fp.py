@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from collections import defaultdict
 from itertools import combinations
-from tabulate import tabulate
+
 import math
 
 # ===================== FP-Growth Logic with Tree Output =====================
