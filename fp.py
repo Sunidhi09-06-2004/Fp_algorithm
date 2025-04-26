@@ -3,135 +3,119 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from collections import defaultdict
 from itertools import combinations
+from tabulate import tabulate
 import math
 
-# ===================== FP-Growth Code =====================
-
+# ===================== FP-Growth Logic with Tree Output =====================
 class FPNode:
-    id_counter = 0
-
     def __init__(self, item_name, count, parent):
         self.item_name = item_name
         self.count = count
         self.parent = parent
         self.children = {}
         self.link = None
-        self.uid = FPNode.id_counter
-        FPNode.id_counter += 1
 
     def increment(self, count):
         self.count += count
 
-def build_header_table(transactions, min_support_count):
-    item_counts = defaultdict(int)
-    for transaction in transactions:
-        for item in transaction:
-            item_counts[item] += 1
-    return {item: [cnt, None] for item, cnt in item_counts.items() if cnt >= min_support_count}
+class FPTree:
+    def __init__(self, transactions, min_support):
+        self.root = FPNode(None, 1, None)
+        self.header_table = {}
+        self.min_support = min_support
+        self.build_header_table(transactions)
+        self.build_fp_tree(transactions)
 
-def sort_items(transaction, header_table):
-    return sorted([item for item in transaction if item in header_table],
-                  key=lambda item: header_table[item][0], reverse=True)
+    def build_header_table(self, transactions):
+        item_counts = defaultdict(int)
+        for transaction in transactions:
+            for item in transaction:
+                item_counts[item] += 1
+        self.header_table = {item: [count, None] for item, count in item_counts.items() if count >= self.min_support}
 
-def insert_tree(transaction, root, header_table, count):
-    current_node = root
-    for item in transaction:
-        if item not in current_node.children:
-            new_node = FPNode(item, count, current_node)
-            current_node.children[item] = new_node
-            if header_table[item][1] is None:
-                header_table[item][1] = new_node
-            else:
-                node = header_table[item][1]
-                while node.link:
-                    node = node.link
-                node.link = new_node
+    def update_header(self, node):
+        item = node.item_name
+        if self.header_table[item][1] is None:
+            self.header_table[item][1] = node
         else:
-            current_node.children[item].increment(count)
-        current_node = current_node.children[item]
+            current = self.header_table[item][1]
+            while current.link is not None:
+                current = current.link
+            current.link = node
 
-def construct_fp_tree(transactions, min_support_count):
-    header_table = build_header_table(transactions, min_support_count)
-    if len(header_table) == 0:
-        return None, None
-    root = FPNode(None, 1, None)
-    for transaction in transactions:
-        sorted_items = sort_items(transaction, header_table)
-        if sorted_items:
-            insert_tree(sorted_items, root, header_table, 1)  # Each transaction counted once
-    return root, header_table
+    def insert_transaction(self, transaction):
+        transaction = [item for item in transaction if item in self.header_table]
+        transaction.sort(key=lambda item: (-self.header_table[item][0], item))
+        current_node = self.root
+        for item in transaction:
+            if item in current_node.children:
+                current_node.children[item].increment(1)
+            else:
+                new_node = FPNode(item, 1, current_node)
+                current_node.children[item] = new_node
+                self.update_header(new_node)
+            current_node = current_node.children[item]
 
-def ascend_fp_tree(node):
-    path = []
-    while node.parent and node.parent.item_name is not None:
-        node = node.parent
-        path.append(node.item_name)
-    return path[::-1]
+    def build_fp_tree(self, transactions):
+        for transaction in transactions:
+            self.insert_transaction(transaction)
 
-def find_prefix_paths(base_pattern, node):
-    conditional_patterns = []
-    while node:
-        path = ascend_fp_tree(node)
-        if path:
-            conditional_patterns.append((path, node.count))
-        node = node.link
-    return conditional_patterns
+    def tree_to_string(self, node):
+        result = []
+        for child in node.children.values():
+            subtree = self.tree_to_string(child)
+            result.append(f"<{child.item_name}:{child.count}" + (", " + subtree if subtree else "") + ">")
+        return ", ".join(result)
 
-def build_conditional_pattern_base(header_table, item):
-    node = header_table[item][1]
-    patterns = []
-    while node:
-        path = ascend_fp_tree(node)
-        if path:
-            patterns.append((path, node.count))
-        node = node.link
-    return patterns
+    def build_conditional_tree(self, conditional_patterns):
+        transactions = []
+        for path, count in conditional_patterns:
+            transactions.extend([path] * count)
+        if not transactions:
+            return None
+        return FPTree(transactions, self.min_support)
 
-def construct_conditional_fp_tree(conditional_patterns, min_support_count):
-    transactions = []
-    for path, count in conditional_patterns:
-        for _ in range(count):
-            transactions.append(path)
-    return construct_fp_tree(transactions, min_support_count)
+    def mine_patterns(self):
+        patterns = {}
+        conditional_pattern_bases = {}
+        conditional_fp_trees = {}
+        frequent_patterns = {}
 
-def mine_fp_tree(header_table, prefix, frequent_itemsets, min_support_count):
-    sorted_items = sorted(header_table.items(), key=lambda x: x[1][0])
-    for base_item, (count, node) in sorted_items:
-        new_freq_set = prefix.copy()
-        new_freq_set.add(base_item)
-        frequent_itemsets.append((new_freq_set, count))
-        conditional_patterns = find_prefix_paths(base_item, node)
-        conditional_tree, new_header_table = construct_conditional_fp_tree(conditional_patterns, min_support_count)
-        if new_header_table:
-            mine_fp_tree(new_header_table, new_freq_set, frequent_itemsets, min_support_count)
+        items = sorted(self.header_table.items(), key=lambda x: x[1][0])
+        for item, (support, node) in items:
+            conditional_patterns = []
+            while node is not None:
+                path = []
+                parent = node.parent
+                while parent and parent.item_name is not None:
+                    path.append(parent.item_name)
+                    parent = parent.parent
+                if path:
+                    conditional_patterns.append((path[::-1], node.count))
+                node = node.link
 
-# ===================== Association Rules =====================
+            conditional_pattern_bases[item] = conditional_patterns
+            conditional_tree = self.build_conditional_tree(conditional_patterns)
+            conditional_fp_trees[item] = self.tree_to_string(conditional_tree.root) if conditional_tree else ""
 
-def generate_association_rules(frequent_itemsets, min_confidence_percent):
-    min_confidence = min_confidence_percent / 100.0
-    rules = []
-    itemset_support = {frozenset(itemset): support for itemset, support in frequent_itemsets}
-    for itemset, support in frequent_itemsets:
-        if len(itemset) > 1:
-            items = list(itemset)
-            for i in range(1, len(items)):
-                for antecedent in combinations(items, i):
-                    antecedent = frozenset(antecedent)
-                    consequent = frozenset(itemset) - antecedent
-                    if consequent and antecedent in itemset_support:
-                        confidence = itemset_support[frozenset(itemset)] / itemset_support[antecedent]
-                        if confidence >= min_confidence:
-                            rules.append((set(antecedent), set(consequent), round(confidence*100, 2), support))
-    return rules
+            if conditional_tree:
+                _, _, subtree_patterns = conditional_tree.mine_patterns()
+                for pattern, count in subtree_patterns.items():
+                    full_pattern = tuple(list(pattern) + [item])
+                    patterns[full_pattern] = count
+                    frequent_patterns[full_pattern] = count
+
+            patterns[(item,)] = support
+            frequent_patterns[(item,)] = support
+
+        return conditional_pattern_bases, conditional_fp_trees, frequent_patterns
 
 # ===================== Streamlit App =====================
-
 st.set_page_config(page_title="FP-Growth Frequent Itemsets", layout="wide")
 st.title("FP-Growth Frequent Itemsets Mining")
 
-st.markdown("""  
-Upload a *Transaction CSV* and discover *Frequent Itemsets* and *Association Rules*  
-using the **FP-Growth** algorithm.
+st.markdown("""
+Upload a *Transaction CSV* and discover *Frequent Itemsets* and *Conditional FP-Trees* using the **FP-Growth** algorithm.
 """)
 
 uploaded_file = st.file_uploader("Upload Transaction CSV", type=["csv"])
@@ -147,58 +131,27 @@ if uploaded_file:
     transactions = df[item_col].dropna().astype(str).apply(lambda x: x.split(',')).tolist()
 
     min_support_percent = st.number_input("Enter Minimum Support (%)", min_value=1, max_value=100, value=5)
-    min_confidence_percent = st.number_input("Enter Minimum Confidence (%)", min_value=1, max_value=100, value=60)
 
     total_transactions = len(transactions)
     min_support_count = math.ceil((min_support_percent / 100) * total_transactions)
 
     if st.button("Run FP-Growth"):
-        root, header_table = construct_fp_tree(transactions, min_support_count)
+        tree = FPTree(transactions, min_support_count)
+        conditional_pattern_bases, conditional_fp_trees, frequent_patterns = tree.mine_patterns()
 
-        if root is None:
-            st.warning("No frequent items found with the given support.")
-        else:
-            frequent_itemsets = []
-            mine_fp_tree(header_table, set(), frequent_itemsets, min_support_count)
+        table = []
+        for item in sorted(conditional_pattern_bases.keys()):
+            cpb = ', '.join([f"{p}:{c}" for p, c in conditional_pattern_bases[item]])
+            tree_str = conditional_fp_trees[item]
+            freq_patterns = [str(p) + f":{c}" for p, c in frequent_patterns.items() if item in p and p[-1] == item]
+            freq_str = ', '.join(freq_patterns)
+            table.append([item, cpb, tree_str, freq_str])
 
-            result_df = pd.DataFrame([(list(items), support) for items, support in frequent_itemsets],
-                                     columns=["Itemset", "Support"])
+        headers = ["Item", "Conditional Pattern Base", "Conditional FP-Tree", "Frequent Pattern Generated"]
+        result_df = pd.DataFrame(table, columns=headers)
 
-            if result_df.empty:
-                st.warning("No frequent itemsets found.")
-            else:
-                st.success(f"Found {len(result_df)} frequent itemsets!")
-                st.write("### Frequent Itemsets")
-                st.dataframe(result_df)
+        st.success(f"Mined Frequent Itemsets with FP-Growth!")
+        st.write("### FP-Growth Conditional Pattern Table")
+        st.dataframe(result_df)
 
-                item_count = defaultdict(int)
-                for items, support in frequent_itemsets:
-                    for item in items:
-                        item_count[item] += support
-
-                top_items = sorted(item_count.items(), key=lambda x: x[1], reverse=True)[:10]
-                if top_items:
-                    item_names = [x[0] for x in top_items]
-                    item_support = [x[1] for x in top_items]
-
-                    fig, ax = plt.subplots()
-                    ax.bar(item_names, item_support, color='skyblue')
-                    plt.xticks(rotation=45)
-                    plt.title("Top Frequent Items")
-                    st.pyplot(fig)
-
-            rules = generate_association_rules(frequent_itemsets, min_confidence_percent)
-
-            if rules:
-                rules_df = pd.DataFrame([(
-                    list(antecedent), list(consequent), confidence, support
-                ) for antecedent, consequent, confidence, support in rules],
-                columns=["Antecedent", "Consequent", "Confidence (%)", "Support"])
-
-                st.write("### Association Rules")
-                st.dataframe(rules_df)
-
-                st.download_button("Download Frequent Itemsets", result_df.to_csv(index=False), file_name="frequent_itemsets.csv")
-                st.download_button("Download Association Rules", rules_df.to_csv(index=False), file_name="association_rules.csv")
-            else:
-                st.info("No association rules found with the given confidence.")
+        st.download_button("Download Frequent Itemsets Table", result_df.to_csv(index=False), file_name="fp_growth_table.csv")
