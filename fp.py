@@ -194,7 +194,7 @@ if uploaded_file:
             sorted_items = sorted(item_supports.items(), key=lambda x: x[1], reverse=True)
             items, supports = zip(*sorted_items)
 
-            fig, ax = plt.subplots(figsize=(10, 6))
+            fig, ax = plt.subplots(figsize=(6, 3))
             ax.bar(items, supports, color='skyblue')
             ax.set_xlabel('Items', fontsize=12)
             ax.set_ylabel('Support Count', fontsize=12)
