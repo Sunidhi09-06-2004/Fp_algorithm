@@ -109,6 +109,24 @@ class FPTree:
 
         return conditional_pattern_bases, conditional_fp_trees, frequent_patterns
 
+# ===================== Association Rules Generation =====================
+def generate_association_rules(frequent_patterns, min_conf):
+    rules = []
+    for itemset in frequent_patterns:
+        if len(itemset) < 2:
+            continue
+        itemset_support = frequent_patterns[itemset]
+        for i in range(1, len(itemset)):
+            for antecedent in combinations(itemset, i):
+                consequent = tuple(sorted(set(itemset) - set(antecedent)))
+                if not consequent:
+                    continue
+                antecedent = tuple(sorted(antecedent))
+                if antecedent in frequent_patterns:
+                    confidence = itemset_support / frequent_patterns[antecedent]
+                    rules.append((antecedent, consequent, confidence))
+    return [(a, c, conf, 'Strong' if conf >= min_conf else 'Weak') for a, c, conf in rules]
+
 # ===================== Streamlit App =====================
 st.set_page_config(page_title="FP-Growth Frequent Itemsets", layout="wide")
 st.title("FP-Growth Frequent Itemsets Mining")
@@ -132,7 +150,8 @@ if uploaded_file:
     total_transactions = len(transactions)
     st.info(f"Total Transactions: {total_transactions}")
 
-    min_support_count = st.number_input("Enter Minimum Support Count", min_value=1, value=2)
+    min_support_count = st.number_input("Enter Minimum Support Count", min_value=1, max_value=total_transactions, value=2)
+    min_conf_percent = st.number_input("Enter Minimum Confidence (%)", min_value=1, max_value=100, value=70)
 
     if st.button("Run FP-Growth"):
         tree = FPTree(transactions, min_support_count)
@@ -154,3 +173,16 @@ if uploaded_file:
         st.dataframe(result_df)
 
         st.download_button("Download Frequent Itemsets Table", result_df.to_csv(index=False), file_name="fp_growth_table.csv")
+
+        # Association Rule Generation
+        min_conf = min_conf_percent / 100
+        rules = generate_association_rules(frequent_patterns, min_conf)
+
+        if rules:
+            st.write("### Generated Association Rules")
+            rules_df = pd.DataFrame(rules, columns=["Antecedent", "Consequent", "Confidence", "Strength"])
+            st.dataframe(rules_df)
+
+            st.download_button("Download Association Rules", rules_df.to_csv(index=False), file_name="association_rules.csv")
+        else:
+            st.info("No strong rules generated based on the given minimum confidence.")
