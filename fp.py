@@ -1,3 +1,4 @@
+# ===================== Imports =====================
 import streamlit as st
 import pandas as pd
 from collections import defaultdict
@@ -9,7 +10,7 @@ import math
 class FPNode:
     id_counter = 0
 
-    def _init_(self, item_name, count, parent):
+    def __init__(self, item_name, count, parent):  # <--- Corrected __init__
         self.item_name = item_name
         self.count = count
         self.parent = parent
@@ -57,7 +58,7 @@ def construct_fp_tree(transactions, min_support_count):
     for transaction in transactions:
         sorted_items = sort_items(transaction, header_table)
         if sorted_items:
-            insert_tree(sorted_items, root, header_table, 1)  # Use 1 as count per transaction
+            insert_tree(sorted_items, root, header_table, 1)  # 1 count per transaction
     return root, header_table
 
 def ascend_fp_tree(node):
@@ -76,43 +77,38 @@ def find_prefix_paths(base_pattern, node):
         node = node.link
     return conditional_patterns
 
-# ===================== CPB & Conditional FP-Tree =====================
-def build_conditional_pattern_base(header_table, item, root):
-    conditional_patterns = []
+def build_conditional_pattern_base(header_table, item):
     node = header_table[item][1]
-    while node:
-        path = ascend_fp_tree(node)
-        if path:
-            conditional_patterns.append((path, node.count))
-        node = node.link
-    return conditional_patterns
+    return find_prefix_paths(item, node)
 
 def construct_conditional_fp_tree(conditional_patterns, min_support_count):
-    conditional_tree, header_table = construct_fp_tree(conditional_patterns, min_support_count)
-    return conditional_tree, header_table
+    transaction_list = []
+    for path, count in conditional_patterns:
+        for _ in range(count):
+            transaction_list.append(path)
+    return construct_fp_tree(transaction_list, min_support_count)
 
 def mine_fp_tree(header_table, prefix, frequent_itemsets, min_support_count):
-    sorted_items = sorted(header_table.items(), key=lambda x: x[1][0])
+    sorted_items = sorted(header_table.items(), key=lambda x: x[1][0])  # sort by frequency
     for base_item, (count, node) in sorted_items:
         new_freq_set = prefix.copy()
         new_freq_set.add(base_item)
         frequent_itemsets.append((new_freq_set, count))
-        conditional_patterns = find_prefix_paths(base_item, node)
+        conditional_patterns = build_conditional_pattern_base(header_table, base_item)
         conditional_tree, new_header_table = construct_conditional_fp_tree(conditional_patterns, min_support_count)
         if new_header_table:
             mine_fp_tree(new_header_table, new_freq_set, frequent_itemsets, min_support_count)
 
 # ===================== Association Rules =====================
 def generate_association_rules(frequent_itemsets, min_confidence_percent):
-    min_confidence = min_confidence_percent / 100.0  # convert percentage to fraction
+    min_confidence = min_confidence_percent / 100.0
     rules = []
     itemset_support = {frozenset(itemset): support for itemset, support in frequent_itemsets}
     for itemset, support in frequent_itemsets:
         if len(itemset) > 1:
             items = list(itemset)
             for i in range(1, len(items)):
-                antecedents = combinations(items, i)
-                for antecedent in antecedents:
+                for antecedent in combinations(items, i):
                     antecedent = frozenset(antecedent)
                     consequent = frozenset(itemset) - antecedent
                     if consequent and antecedent in itemset_support:
