@@ -6,6 +6,7 @@ from itertools import combinations
 import math
 
 # ===================== FP-Growth Code =====================
+
 class FPNode:
     id_counter = 0
 
@@ -105,6 +106,7 @@ def mine_fp_tree(header_table, prefix, frequent_itemsets, min_support_count):
             mine_fp_tree(new_header_table, new_freq_set, frequent_itemsets, min_support_count)
 
 # ===================== Association Rules =====================
+
 def generate_association_rules(frequent_itemsets, min_confidence_percent):
     min_confidence = min_confidence_percent / 100.0
     rules = []
@@ -123,10 +125,11 @@ def generate_association_rules(frequent_itemsets, min_confidence_percent):
     return rules
 
 # ===================== Streamlit App =====================
+
 st.set_page_config(page_title="FP-Growth Frequent Itemsets", layout="wide")
 st.title("FP-Growth Frequent Itemsets Mining")
 
-st.markdown("""
+st.markdown("""  
 Upload a *Transaction CSV* and discover *Frequent Itemsets* and *Association Rules*  
 using the **FP-Growth** algorithm.
 """)
