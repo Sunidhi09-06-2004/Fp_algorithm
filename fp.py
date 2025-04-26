@@ -1,8 +1,7 @@
-# ===================== Imports =====================
 import streamlit as st
 import pandas as pd
-from collections import defaultdict
 import matplotlib.pyplot as plt
+from collections import defaultdict
 from itertools import combinations
 import math
 
@@ -10,7 +9,7 @@ import math
 class FPNode:
     id_counter = 0
 
-    def __init__(self, item_name, count, parent):  # <--- Corrected __init__
+    def __init__(self, item_name, count, parent):
         self.item_name = item_name
         self.count = count
         self.parent = parent
@@ -58,12 +57,12 @@ def construct_fp_tree(transactions, min_support_count):
     for transaction in transactions:
         sorted_items = sort_items(transaction, header_table)
         if sorted_items:
-            insert_tree(sorted_items, root, header_table, 1)  # 1 count per transaction
+            insert_tree(sorted_items, root, header_table, 1)  # Each transaction counted once
     return root, header_table
 
 def ascend_fp_tree(node):
     path = []
-    while node.parent is not None and node.parent.item_name is not None:
+    while node.parent and node.parent.item_name is not None:
         node = node.parent
         path.append(node.item_name)
     return path[::-1]
@@ -79,22 +78,28 @@ def find_prefix_paths(base_pattern, node):
 
 def build_conditional_pattern_base(header_table, item):
     node = header_table[item][1]
-    return find_prefix_paths(item, node)
+    patterns = []
+    while node:
+        path = ascend_fp_tree(node)
+        if path:
+            patterns.append((path, node.count))
+        node = node.link
+    return patterns
 
 def construct_conditional_fp_tree(conditional_patterns, min_support_count):
-    transaction_list = []
+    transactions = []
     for path, count in conditional_patterns:
         for _ in range(count):
-            transaction_list.append(path)
-    return construct_fp_tree(transaction_list, min_support_count)
+            transactions.append(path)
+    return construct_fp_tree(transactions, min_support_count)
 
 def mine_fp_tree(header_table, prefix, frequent_itemsets, min_support_count):
-    sorted_items = sorted(header_table.items(), key=lambda x: x[1][0])  # sort by frequency
+    sorted_items = sorted(header_table.items(), key=lambda x: x[1][0])
     for base_item, (count, node) in sorted_items:
         new_freq_set = prefix.copy()
         new_freq_set.add(base_item)
         frequent_itemsets.append((new_freq_set, count))
-        conditional_patterns = build_conditional_pattern_base(header_table, base_item)
+        conditional_patterns = find_prefix_paths(base_item, node)
         conditional_tree, new_header_table = construct_conditional_fp_tree(conditional_patterns, min_support_count)
         if new_header_table:
             mine_fp_tree(new_header_table, new_freq_set, frequent_itemsets, min_support_count)
@@ -118,12 +123,12 @@ def generate_association_rules(frequent_itemsets, min_confidence_percent):
     return rules
 
 # ===================== Streamlit App =====================
-st.set_page_config(page_title="Dataset Analysis Using FP-Growth", layout="wide")
-st.title("Dataset Analysis using FP-Growth")
+st.set_page_config(page_title="FP-Growth Frequent Itemsets", layout="wide")
+st.title("FP-Growth Frequent Itemsets Mining")
 
 st.markdown("""
-Upload a *Transaction CSV* and find *Frequent Itemsets* and *Association Rules*  
-using the *FP-Growth* algorithm
+Upload a *Transaction CSV* and discover *Frequent Itemsets* and *Association Rules*  
+using the **FP-Growth** algorithm.
 """)
 
 uploaded_file = st.file_uploader("Upload Transaction CSV", type=["csv"])
