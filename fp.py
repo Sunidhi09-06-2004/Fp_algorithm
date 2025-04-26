@@ -133,11 +133,11 @@ if uploaded_file:
     min_support_percent = st.number_input("Enter Minimum Support (%)", min_value=1, max_value=100, value=5)
 
     total_transactions = len(transactions)
-    min_support_count = math.ceil((min_support_percent / 100) * total_transactions)
+  min_support_count = st.number_input("Enter Minimum Support Count", min_value=1, value=2)
 
-    if st.button("Run FP-Growth"):
-        tree = FPTree(transactions, min_support_count)
-        conditional_pattern_bases, conditional_fp_trees, frequent_patterns = tree.mine_patterns()
+if st.button("Run FP-Growth"):
+    tree = FPTree(transactions, min_support_count)
+    conditional_pattern_bases, conditional_fp_trees, frequent_patterns = tree.mine_patterns()
 
         table = []
         for item in sorted(conditional_pattern_bases.keys()):
